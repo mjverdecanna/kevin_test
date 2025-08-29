@@ -30,12 +30,12 @@ def get_weather(location, intent, date):
     params = {
         "q": location,
         "appid": api_key,
-        "units": "imperial"  # Use imperial units
+        "units": "imperial"
     }
 
     try:
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        response = requests.get(base_url, params=params, timeout=10) # 10-second timeout
+        response.raise_for_status()
         data = response.json()
 
         if intent == "temperature":
@@ -47,18 +47,10 @@ def get_weather(location, intent, date):
         elif intent == "wind speed":
             wind_speed = data['wind']['speed']
             return f"The current wind speed in {location} is {wind_speed} mph."
-        elif intent == "current weather":
+        else: # Default to current weather
             weather_desc = data['weather'][0]['description']
             temp = data['main']['temp']
             return f"The current weather in {location} is {weather_desc} with a temperature of {temp}°F."
-        elif intent == "forecast":
-            # The free API tier doesn't provide a multi-day forecast in the 'weather' endpoint.
-            # This would require a different endpoint or a more advanced plan.
-            # For now, we can give the current weather as a form of "forecast".
-            weather_desc = data['weather'][0]['description']
-            return f"The current forecast for {location} is: {weather_desc}."
-        else:
-            return "I can't provide that information yet."
 
     except requests.exceptions.RequestException as e:
         return f"Error fetching weather data: {e}"
@@ -81,11 +73,10 @@ def get_forecast(location, date):
     }
 
     try:
-        response = requests.get(base_url, params=params)
+        response = requests.get(base_url, params=params, timeout=10) # 10-second timeout
         response.raise_for_status()
         data = response.json()
 
-        # Find the forecast for the target date
         forecasts = data['list']
         target_forecasts = []
         for forecast in forecasts:
@@ -96,7 +87,6 @@ def get_forecast(location, date):
         if not target_forecasts:
             return f"No forecast data available for {location} on {date.strftime('%Y-%m-%d')}."
 
-        # Summarize the forecast for the day
         summary = f"Forecast for {location} on {date.strftime('%A, %B %d')}:\n"
         for forecast in target_forecasts:
             time = datetime.fromtimestamp(forecast['dt']).strftime('%I:%M %p')
@@ -120,12 +110,11 @@ def process_question(question):
 
     location = None
     for ent in doc.ents:
-        if ent.label_ == "GPE":  # Geopolitical Entity
+        if ent.label_ == "GPE":
             location = ent.text
             break
     
     if not location:
-        # Fallback for locations not recognized as GPE
         for chunk in doc.noun_chunks:
              if "in" in chunk.root.head.text or "for" in chunk.root.head.text:
                  location = chunk.text
@@ -134,7 +123,6 @@ def process_question(question):
     if not location:
         return "Could not determine the location from your question.", None, None
 
-    # Date and Time extraction
     date_entity = None
     for ent in doc.ents:
         if ent.label_ == "DATE":
@@ -147,8 +135,7 @@ def process_question(question):
         if parsed_date:
             target_date = parsed_date
 
-    # Intent detection
-    intent = "current weather" # Default intent
+    intent = "current weather"
     if "temperature" in question.lower():
         intent = "temperature"
     elif "humidity" in question.lower():
@@ -158,47 +145,18 @@ def process_question(question):
     elif "forecast" in question.lower() or (date_entity and target_date.date() > datetime.now().date()):
         intent = "forecast"
 
-    # Distinguish between past, present, and future
     now = datetime.now()
     if target_date.date() < now.date():
         return location, "past_weather", target_date
     elif target_date.date() > now.date() or intent == "forecast":
-        # Check if the forecast is within the 5-day limit
         if target_date.date() > (now + timedelta(days=5)).date():
              return location, "future_weather_limit", target_date
         return location, "forecast", target_date
-    else: # Current weather
+    else:
         return location, intent, now
 
 
-def get_weather_response(question):
-    """
-    Takes a user's question as a string and returns the weather response.
-    This function encapsulates the core logic.
-    """
-    location, intent, date = process_question(question)
-
-    if intent == "past_weather":
-        return "I'm sorry, but I cannot retrieve historical weather data with the current plan."
-    
-    if intent == "future_weather_limit":
-        return f"I can only provide a 5-day forecast. {date.strftime('%Y-%m-%d')} is too far in the future."
-
-    if location and intent:
-        if intent == 'forecast':
-            return get_forecast(location, date)
-        else:
-            return get_weather(location, intent, date)
-    else:
-        # This part of the original logic was returning a tuple.
-        # Let's return a user-friendly string instead.
-        if location:
-             return "Sorry, I could understand the location but not the rest of your question. Please try again."
-        else:
-             return "Sorry, I couldn't understand your question. Please try again."
-
-
-def main_console():
+def main():
     """
     Main function to run the weather AI bot in the console.
     """
@@ -210,8 +168,22 @@ def main_console():
         if question.lower() in ["exit", "quit"]:
             break
 
-        response = get_weather_response(question)
+        location, intent, date = process_question(question)
+
+        response = ""
+        if intent == "past_weather":
+            response = "I'm sorry, but I cannot retrieve historical weather data with the current plan."
+        elif intent == "future_weather_limit":
+            response = f"I can only provide a 5-day forecast. {date.strftime('%Y-%m-%d')} is too far in the future."
+        elif location and intent:
+            if intent == 'forecast':
+                response = get_forecast(location, date)
+            else:
+                response = get_weather(location, intent, date)
+        else:
+            response = location # Contains the error message from process_question
+
         print(response)
 
 if __name__ == "__main__":
-    main_console()
+    main()

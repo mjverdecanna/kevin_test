@@ -25,21 +25,9 @@ This is a Python program that uses natural language processing to understand a u
 
 ## Usage
 
-There are two ways to run this application:
-
-### 1. GUI Mode (with Voice Input/Output)
-
-To run the application with a graphical user interface and voice controls, run the following command:
-
-```bash
-python gui.py
-```
-Press the "Press to Talk" button to ask your weather question. The bot will listen, process your request, and then speak the answer.
-
-### 2. Console Mode (Text-based)
-
-If you prefer to use the command line, you can run the original text-based version:
+To run the application, use the following command:
 
 ```bash
 python main.py
 ```
+You can then type your weather-related questions directly into the console.

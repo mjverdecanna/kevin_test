@@ -1,0 +1,8 @@
+requests
+spacy
+python-dotenv
+dateparser
+SpeechRecognition
+PyAudio
+pyttsx3
+PySide6
